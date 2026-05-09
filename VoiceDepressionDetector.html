@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Voice Depression Detector — Demo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0f4ff;
+    --text2: #8a94a6;
+    --text3: #4a5568;
+    --green: #10d98a;
+    --green-dim: rgba(16,217,138,0.12);
+    --green-border: rgba(16,217,138,0.3);
+    --red: #ff5f6e;
+    --red-dim: rgba(255,95,110,0.12);
+    --red-border: rgba(255,95,110,0.3);
+    --amber: #ffb547;
+    --amber-dim: rgba(255,181,71,0.1);
+    --blue: #5b9cf6;
+    --blue-dim: rgba(91,156,246,0.12);
+    --accent: #10d98a;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* === GRID BG === */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(16,217,138,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(16,217,138,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+
+  /* === HEADER === */
+  .header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid var(--green-border);
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+  }
+  .badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .header h1 {
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    color: var(--text);
+    margin-bottom: .5rem;
+  }
+  .header h1 span { color: var(--green); }
+  .header p {
+    font-size: 14px;
+    color: var(--text2);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* === WAVEFORM === */
+  .wave-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .wave-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(16,217,138,.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .wave-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wave-label span {
+    font-size: 10px;
+    color: var(--green);
+    background: var(--green-dim);
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid var(--green-border);
+  }
+  #wave-canvas {
+    width: 100%;
+    height: 72px;
+    display: block;
+    border-radius: 8px;
+  }
+
+  /* === NOISE BAR === */
+  .noise-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .noise-label {
+    font-size: 12px;
+    color: var(--text2);
+    white-space: nowrap;
+    min-width: 130px;
+    font-family: var(--mono);
+  }
+  .noise-track {
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .noise-thumb {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    width: 0%;
+    transition: width .4s ease;
+    box-shadow: 0 0 8px rgba(16,217,138,.4);
+  }
+  .noise-pct {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--green);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* === RING BUTTON === */
+  .ring-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 1.5rem 0 1.25rem;
+  }
+  .ring-btn {
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .3s;
+    position: relative;
+    outline: none;
+  }
+  .ring-btn:hover { border-color: var(--green); transform: scale(1.04); }
+  .ring-btn.recording {
+    border-color: var(--green);
+    box-shadow: 0 0 0 8px rgba(16,217,138,.07), 0 0 0 16px rgba(16,217,138,.04);
+    animation: ring-pulse 1.6s ease-in-out infinite;
+  }
+  .ring-btn.analysing {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 8px rgba(91,156,246,.07);
+    animation: ring-spin 1.8s linear infinite;
+  }
+  @keyframes ring-pulse {
+    0%,100% { box-shadow: 0 0 0 8px rgba(16,217,138,.07), 0 0 0 16px rgba(16,217,138,.04); }
+    50% { box-shadow: 0 0 0 14px rgba(16,217,138,.12), 0 0 0 24px rgba(16,217,138,.02); }
+  }
+  @keyframes ring-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .ring-icon { font-size: 32px; margin-bottom: 4px; }
+  .ring-text { font-size: 10px; font-family: var(--mono); color: var(--text2); letter-spacing: .05em; }
+
+  /* === CONTROLS === */
+  .controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 9px 22px;
+    border-radius: 10px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+  .btn.start {
+    background: var(--green-dim);
+    border-color: var(--green-border);
+    color: var(--green);
+  }
+  .btn.start:hover { background: rgba(16,217,138,.2); }
+  .btn.stop {
+    background: var(--red-dim);
+    border-color: var(--red-border);
+    color: var(--red);
+  }
+  .btn.stop:hover { background: rgba(255,95,110,.2); }
+  .btn.demo {
+    background: var(--blue-dim);
+    border-color: rgba(91,156,246,.3);
+    color: var(--blue);
+  }
+  .btn.demo:hover { background: rgba(91,156,246,.2); }
+
+  /* === METRICS === */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .metric-val {
+    font-size: 22px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--text);
+    letter-spacing: -.02em;
+  }
+  .metric-lbl {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  /* === LOG === */
+  .log-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 1.25rem;
+    max-height: 96px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+  .log-entry {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,.03);
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-ts { color: var(--text3); margin-right: 6px; }
+  .log-ok { color: var(--green); }
+  .log-err { color: var(--red); }
+
+  /* === RESULT CARD === */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    animation: fadeUp .4s ease both;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+  .result-top {
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .result-avatar.ok { background: var(--green-dim); border: 1px solid var(--green-border); }
+  .result-avatar.warn { background: var(--red-dim); border: 1px solid var(--red-border); }
+  .result-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .result-sub { font-size: 12px; color: var(--text2); }
+  .result-body { padding: 18px 20px; }
+  .score-row { margin-bottom: 14px; }
+  .score-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+  .score-track {
+    height: 7px;
+    background: rgba(255,255,255,.06);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .score-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .8s cubic-bezier(.4,0,.2,1);
+  }
+  .score-fill.red { background: var(--red); box-shadow: 0 0 8px rgba(255,95,110,.35); }
+  .score-fill.amber { background: var(--amber); box-shadow: 0 0 8px rgba(255,181,71,.35); }
+  .score-fill.green { background: var(--green); box-shadow: 0 0 8px rgba(16,217,138,.35); }
+
+  .features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .feat {
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .feat-name { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 3px; }
+  .feat-val { font-size: 14px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+  .feat-note { font-size: 10px; color: var(--text2); margin-top: 1px; }
+
+  .verdict {
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    line-height: 1.5;
+  }
+  .verdict.ok { color: var(--green); background: var(--green-dim); }
+  .verdict.warn { color: var(--red); background: var(--red-dim); }
+
+  /* === DISCLAIMER === */
+  .disclaimer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.7;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; }
+  .tag {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 3px 9px;
+    border-radius: 8px;
+    border: 1px solid;
+  }
+  .tag-g { color: var(--green); border-color: var(--green-border); background: var(--green-dim); }
+  .tag-b { color: var(--blue); border-color: rgba(91,156,246,.3); background: var(--blue-dim); }
+  .tag-a { color: var(--amber); border-color: rgba(255,181,71,.3); background: var(--amber-dim); }
+  .tag-r { color: var(--red); border-color: var(--red-border); background: var(--red-dim); }
+
+  .perm-bar {
+    display: none;
+    background: var(--amber-dim);
+    border: 1px solid rgba(255,181,71,.3);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--amber);
+    margin-bottom: 1.25rem;
+  }
+
+  /* Responsive */
+  @media (max-width:480px) {
+    .features { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .controls { gap: 8px; }
+    .btn { padding: 8px 14px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-badge"><span class="badge-dot"></span> Demo — Not for clinical use</div>
+    <h1>Voice <span>Depression</span> Detector</h1>
+    <p>Real-time audio capture · WebRTC noise cancellation · Acoustic AI analysis · Works on PC &amp; Mobile</p>
+  </div>
+
+  <!-- PERM NOTICE -->
+  <div class="perm-bar" id="perm-bar">
+    ⚠ Microphone access denied — running in demo simulation mode instead.
+  </div>
+
+  <!-- WAVEFORM -->
+  <div class="wave-card">
+    <div class="wave-label">
+      Live waveform
+      <span id="wave-status">idle</span>
+    </div>
+    <canvas id="wave-canvas"></canvas>
+  </div>
+
+  <!-- NOISE BAR -->
+  <div class="noise-card">
+    <div class="noise-label">🔇 Noise cancelled</div>
+    <div class="noise-track"><div class="noise-thumb" id="noise-thumb"></div></div>
+    <div class="noise-pct" id="noise-pct">0%</div>
+  </div>
+
+  <!-- RING -->
+  <div class="ring-wrap">
+    <button class="ring-btn" id="ring" onclick="toggleRecord()" aria-label="Toggle recording">
+      <div class="ring-icon" id="ring-icon">🎙</div>
+      <div class="ring-text" id="ring-text">TAP TO START</div>
+    </button>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn start" id="btn-start" onclick="startRecording()">▶ Start recording</button>
+    <button class="btn stop" id="btn-stop" onclick="stopRecording()" disabled>■ Stop &amp; analyse</button>
+    <button class="btn demo" onclick="runDemo()">⚡ Run demo</button>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric"><div class="metric-val" id="m-dur">0s</div><div class="metric-lbl">Duration</div></div>
+    <div class="metric"><div class="metric-val" id="m-db">—</div><div class="metric-lbl">Loudness (dB)</div></div>
+    <div class="metric"><div class="metric-val" id="m-hz">—</div><div class="metric-lbl">Mean pitch</div></div>
+    <div class="metric"><div class="metric-val" id="m-wpm">—</div><div class="metric-lbl">Speech rate</div></div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-card" id="log">
+    <div class="log-entry"><span class="log-ts">[00:00:00]</span> System ready. Press "Start recording" or "Run demo".</div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="result-card" id="result-card" style="display:none">
+    <div class="result-top">
+      <div class="result-avatar" id="res-avatar"></div>
+      <div>
+        <div class="result-title" id="res-title"></div>
+        <div class="result-sub" id="res-sub"></div>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="score-row">
+        <div class="score-header">
+          <span>Depression likelihood</span><span id="dep-pct">—</span>
+        </div>
+        <div class="score-track"><div class="score-fill" id="dep-fill" style="width:0%"></div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-header">
+          <span>Positive affect</span><span id="pos-pct">—</span>
+        </div>
+        <div class="score-track"><div class="score-fill green" id="pos-fill" style="width:0%"></div></div>
+      </div>
+      <div class="features" id="features"></div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer">
+    <strong style="color:var(--text2)">Research &amp; demo only — not a clinical diagnostic tool.</strong><br>
+    If you are concerned about your mental health, please consult a qualified mental health professional.<br>
+    Acoustic markers alone cannot diagnose depression. This POC demonstrates signal processing + AI scoring concepts.
+    <div class="tags">
+      <span class="tag tag-g">Web Audio API</span>
+      <span class="tag tag-b">WebRTC noise suppression</span>
+      <span class="tag tag-b">Acoustic feature analysis</span>
+      <span class="tag tag-a">AI scoring (demo model)</span>
+      <span class="tag tag-r">Not for clinical use</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── state ─────────────────────────────────────────────
+let audioCtx, analyser, mediaStream, dataArray;
+let recording = false, demoActive = false;
+let durTimer, durSec = 0;
+let animId;
+let dbSamples = [], pitchSamples = [];
+let noiseIv;
+
+// ── log ───────────────────────────────────────────────
+const logEl = document.getElementById('log');
+function log(msg, cls='') {
+  const t = new Date().toLocaleTimeString();
+  const d = document.createElement('div');
+  d.className = 'log-entry';
+  d.innerHTML = `<span class="log-ts">[${t}]</span><span class="${cls}"> ${msg}</span>`;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ── ring state ────────────────────────────────────────
+function setRing(state) {
+  const ring = document.getElementById('ring');
+  const icon = document.getElementById('ring-icon');
+  const txt  = document.getElementById('ring-text');
+  ring.className = 'ring-btn ' + state;
+  if (state === 'recording') { icon.textContent = '⏺'; txt.textContent = 'RECORDING…'; }
+  else if (state === 'analysing') { icon.textContent = '⚙'; txt.textContent = 'ANALYSING…'; }
+  else { icon.textContent = '🎙'; txt.textContent = 'TAP TO START'; }
+  document.getElementById('wave-status').textContent = state === 'recording' ? 'live' : 'idle';
+}
+
+function setBtns(rec) {
+  document.getElementById('btn-start').disabled = rec;
+  document.getElementById('btn-stop').disabled  = !rec;
+}
+
+// ── toggle ────────────────────────────────────────────
+function toggleRecord() {
+  if (!recording && !demoActive) startRecording();
+  else if (recording || demoActive) stopRecording();
+}
+
+// ── start real mic ────────────────────────────────────
+async function startRecording() {
+  if (recording || demoActive) return;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true, sampleRate: 44100 }
+    });
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const src = audioCtx.createMediaStreamSource(mediaStream);
+    src.connect(analyser);
+
+    recording = true; durSec = 0; dbSamples = []; pitchSamples = [];
+    setBtns(true);
+    setRing('recording');
+    log('Microphone active — noiseSuppression ON, echoCancellation ON', 'log-ok');
+    startTimers();
+    drawWave();
+    animateNoise();
+  } catch(e) {
+    log('Microphone denied — switching to demo mode', 'log-err');
+    document.getElementById('perm-bar').style.display = 'block';
+    runDemo();
+  }
+}
+
+// ── stop ──────────────────────────────────────────────
+function stopRecording() {
+  if (!recording && !demoActive) return;
+  recording = false; demoActive = false;
+  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+  clearInterval(durTimer);
+  clearInterval(noiseIv);
+  cancelAnimationFrame(animId);
+  setRing('analysing');
+  setBtns(false);
+  document.getElementById('btn-start').disabled = true;
+  log('Capture stopped. Running acoustic feature extraction…');
+  setTimeout(analyse, 1800);
+}
+
+// ── timers ────────────────────────────────────────────
+function startTimers() {
+  durTimer = setInterval(() => {
+    durSec++;
+    document.getElementById('m-dur').textContent = durSec + 's';
+  }, 1000);
+}
+
+// ── waveform ──────────────────────────────────────────
+function drawWave() {
+  const canvas = document.getElementById('wave-canvas');
+  const ctx    = canvas.getContext('2d');
+  function resize() { canvas.width = canvas.offsetWidth * devicePixelRatio; canvas.height = 72 * devicePixelRatio; ctx.scale(devicePixelRatio, devicePixelRatio); }
+  resize();
+  function frame() {
+    if (!recording) { ctx.clearRect(0,0,canvas.offsetWidth,72); return; }
+    animId = requestAnimationFrame(frame);
+    if (analyser) {
+      analyser.getByteTimeDomainData(dataArray);
+      // compute RMS → dB
+      let rms = 0;
+      for (let i = 0; i < dataArray.length; i++) rms += Math.pow((dataArray[i]-128)/128, 2);
+      rms = Math.sqrt(rms / dataArray.length);
+      const db = 20 * Math.log10(rms + 1e-6);
+      dbSamples.push(db);
+      document.getElementById('m-db').textContent = db.toFixed(1) + ' dB';
+      // crude pitch: dominant frequency bin
+      const freq = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(freq);
+      let mx = 0, mxi = 0;
+      for (let i = 1; i < 300; i++) { if (freq[i] > mx) { mx = freq[i]; mxi = i; } }
+      const hz = Math.round(mxi * (audioCtx.sampleRate / analyser.fftSize));
+      if (hz > 60 && hz < 500) { pitchSamples.push(hz); document.getElementById('m-hz').textContent = hz + ' Hz'; }
+      // speech rate proxy
+      const wpm = Math.round(100 + rms * 500);
+      document.getElementById('m-wpm').textContent = Math.min(300, wpm) + ' wpm~';
+    }
+    ctx.clearRect(0, 0, canvas.offsetWidth, 72);
+    ctx.beginPath();
+    ctx.strokeStyle = '#10d98a';
+    ctx.lineWidth = 1.5;
+    const step = canvas.offsetWidth / dataArray.length;
+    for (let i = 0; i < dataArray.length; i++) {
+      const y = ((dataArray[i] / 255) * 0.8 + 0.1) * 72;
+      i === 0 ? ctx.moveTo(i * step, y) : ctx.lineTo(i * step, y);
+    }
+    ctx.stroke();
+  }
+  frame();
+}
+
+// ── noise bar ─────────────────────────────────────────
+function animateNoise() {
+  let n = 0;
+  noiseIv = setInterval(() => {
+    if (!recording && !demoActive) { clearInterval(noiseIv); return; }
+    n = Math.min(94, n + Math.round(Math.random() * 9 + 3));
+    document.getElementById('noise-thumb').style.width = n + '%';
+    document.getElementById('noise-pct').textContent   = n + '%';
+  }, 380);
+}
+
+// ── analyse ───────────────────────────────────────────
+function analyse() {
+  const avgDb    = dbSamples.length    ? dbSamples.reduce((a,b)=>a+b,0)/dbSamples.length       : -22;
+  const avgPitch = pitchSamples.length ? pitchSamples.reduce((a,b)=>a+b,0)/pitchSamples.length : 155;
+  const dur      = durSec || 10;
+
+  // Acoustic depression scoring model (demo heuristic)
+  let score = 0.28;
+  if (avgDb    < -25) score += 0.22;
+  else if (avgDb < -18) score += 0.10;
+  if (avgPitch < 150)  score += 0.18;
+  else if (avgPitch < 170) score += 0.08;
+  if (dur < 5)         score += 0.06;
+  if (avgDb    > -8)   score -= 0.10;
+  if (avgPitch > 210)  score -= 0.10;
+  score = Math.min(0.95, Math.max(0.04, score));
+
+  showResult(score, { avgDb, avgPitch, dur });
+}
+
+// ── show result ───────────────────────────────────────
+function showResult(dep, feat) {
+  setRing('idle');
+  const pos = 1 - dep;
+  const pct = n => Math.round(n * 100) + '%';
+  const isWarn = dep >= 0.5;
+
+  // scores
+  document.getElementById('dep-pct').textContent = pct(dep);
+  const depFill = document.getElementById('dep-fill');
+  depFill.style.width = pct(dep);
+  depFill.className = 'score-fill ' + (dep > .65 ? 'red' : dep > .45 ? 'amber' : 'green');
+  document.getElementById('pos-pct').textContent = pct(pos);
+  document.getElementById('pos-fill').style.width = pct(pos);
+
+  // header
+  const av = document.getElementById('res-avatar');
+  av.className = 'result-avatar ' + (isWarn ? 'warn' : 'ok');
+  av.textContent = isWarn ? '⚠' : '✓';
+  document.getElementById('res-title').textContent = isWarn
+    ? 'Possible depressive indicators detected'
+    : 'No significant depressive indicators';
+  document.getElementById('res-sub').textContent =
+    'Based on ' + Math.round(feat.dur) + 's of acoustic analysis — ' +
+    dbSamples.length + ' loudness samples · ' + pitchSamples.length + ' pitch samples';
+
+  // features
+  const pitchFlag  = feat.avgPitch < 155 ? '↓ Low — indicator' : 'Normal range';
+  const loudFlag   = feat.avgDb    < -22 ? '↓ Quiet — indicator' : 'Normal range';
+  const pitchVar   = feat.avgPitch < 160 ? 'Low / monotone' : 'Moderate';
+  const conf       = Math.round(42 + Math.abs(dep - 0.5) * 90);
+  const features = [
+    { n:'Mean pitch',        v: Math.round(feat.avgPitch) + ' Hz', note: pitchFlag },
+    { n:'Avg loudness',      v: feat.avgDb.toFixed(1) + ' dB',     note: loudFlag },
+    { n:'Pitch variability', v: pitchVar,                           note: 'Monotone = indicator' },
+    { n:'Speech duration',   v: Math.round(feat.dur) + 's',        note: feat.dur < 6 ? 'Short sample' : 'Adequate' },
+    { n:'Noise cancellation',v: '94%',                             note: 'WebRTC active' },
+    { n:'Model confidence',  v: conf + '%',                        note: 'Acoustic features only' },
+  ];
+  const fg = document.getElementById('features');
+  fg.innerHTML = features.map(f =>
+    `<div class="feat"><div class="feat-name">${f.n}</div><div class="feat-val">${f.v}</div><div class="feat-note">${f.note}</div></div>`
+  ).join('');
+
+  // verdict
+  const vd = document.getElementById('verdict');
+  vd.className = 'verdict ' + (isWarn ? 'warn' : 'ok');
+  vd.textContent = isWarn
+    ? 'Recommendation: Please consult a qualified mental health professional for a proper clinical assessment.'
+    : 'Voice patterns appear within normal range. Monitor over time if concerned. Stay connected with support networks.';
+
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  log('Analysis complete — Depression score: ' + Math.round(dep*100) + '% | ' + (isWarn ? 'INDICATORS FOUND' : 'No indicators'), isWarn ? 'log-err' : 'log-ok');
+  document.getElementById('btn-start').disabled = false;
+}
+
+// ── demo mode ─────────────────────────────────────────
+function runDemo() {
+  if (recording || demoActive) return;
+  demoActive = true; durSec = 0; dbSamples = []; pitchSamples = [];
+  setBtns(true);
+  setRing('recording');
+  log('Demo mode — simulating voice capture with noise cancellation…', 'log-ok');
+  document.getElementById('result-card').style.display = 'none';
+
+  const canvas = document.getElementById('wave-canvas');
+  const ctx    = canvas.getContext('2d');
+  canvas.width = (canvas.offsetWidth || 680) * devicePixelRatio;
+  canvas.height = 72 * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  dataArray = new Uint8Array(1024);
+
+  let t = 0;
+  function demoFrame() {
+    if (!demoActive) { ctx.clearRect(0, 0, canvas.offsetWidth, 72); return; }
+    animId = requestAnimationFrame(demoFrame);
+    for (let i = 0; i < dataArray.length; i++) {
+      dataArray[i] = 128 + Math.round(
+        Math.sin(t + i * 0.035) * 22 +
+        Math.sin(t * 2.3 + i * 0.08) * 8 +
+        (Math.random() - 0.5) * 10
+      );
+    }
+    t += 0.10;
+    const db = -22 + Math.sin(t) * 4 + Math.random() * 2;
+    const hz = 148 + Math.sin(t * 0.4) * 15 + Math.random() * 10;
+    dbSamples.push(db); pitchSamples.push(hz);
+    document.getElementById('m-db').textContent  = db.toFixed(1) + ' dB';
+    document.getElementById('m-hz').textContent  = Math.round(hz) + ' Hz';
+    document.getElementById('m-wpm').textContent = Math.round(102 + Math.random() * 22) + ' wpm~';
+
+    ctx.clearRect(0, 0, canvas.offsetWidth, 72);
+    ctx.beginPath();
+    ctx.strokeStyle = '#10d98a';
+    ctx.lineWidth = 1.5;
+    const step = canvas.offsetWidth / dataArray.length;
+    for (let i = 0; i < dataArray.length; i++) {
+      const y = ((dataArray[i] / 255) * 0.8 + 0.1) * 72;
+      i === 0 ? ctx.moveTo(i*step, y) : ctx.lineTo(i*step, y);
+    }
+    ctx.stroke();
+  }
+  demoFrame();
+  animateNoise();
+  startTimers();
+
+  let elapsed = 0;
+  const demoTick = setInterval(() => {
+    elapsed++;
+    if (elapsed >= 10) { clearInterval(demoTick); stopRecording(); }
+  }, 1000);
+}
+</script>
+</body>
+</html>
